@@ -1,0 +1,345 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ACL-Graph+ &mdash; C:\ (Demo)</title>
+<style>
+  :root{
+    --bg:#0f1115;--panel:#171a21;--panel2:#1d2129;--line:#2a2f3a;
+    --fg:#d7dce3;--muted:#7f8896;--tert:#5a626e;--accent:#5ab0ff;
+    --dir:#22344a;--dirbd:#3a5577;--dirfg:#9db4ff;
+    --file:#1d2129;--filebd:#2a2f3a;--filefg:#aab2bf;
+    --w:#332a12;--wbd:#7a6320;--wfg:#ffcf5a;
+    --alert:#3a1414;--alertbd:#ff5d5d;--alertfg:#ff7b7b;
+    --ok:#46c98b;--weakfg:#ff9b3d;--secret:#ff5d5d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:13px/1.5 ui-monospace,Consolas,monospace;background:var(--bg);color:var(--fg)}
+  header{padding:14px 18px;background:var(--panel);border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+  header h1{font-size:15px;margin:0;font-weight:600;color:#fff}
+  header .meta{color:var(--muted);font-size:12px}
+  .stats{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+  .chip{padding:3px 9px;border-radius:20px;background:var(--panel2);border:1px solid var(--line);font-size:11px}
+  .chip b{color:#fff}.chip.alert b{color:var(--alertfg)}.chip.w b{color:var(--wfg)}.chip.secret b{color:var(--secret)}
+  .warnbar{display:block;padding:8px 18px;background:#3a1414;color:#ffc4c4;font-size:12px;border-bottom:1px solid var(--alertbd)}
+  .warnbar b{color:#fff}
+  .bar{padding:8px 18px;background:var(--panel);border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .bar button{background:var(--bg);border:1px solid var(--line);color:var(--fg);padding:5px 10px;border-radius:6px;cursor:pointer;font:inherit}
+  .bar button:hover{border-color:var(--accent)}
+  .bar label{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:12px;cursor:pointer}
+  input#filter{background:var(--bg);border:1px solid var(--line);color:var(--fg);padding:5px 9px;border-radius:6px;width:280px;font:inherit}
+  .fhint{font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--tert);padding:4px 18px;background:var(--panel)}
+  .fhint b{color:var(--muted)}
+  #wrap{position:relative;width:100%;height:calc(100vh - 168px);background:#0c0e12;overflow:hidden;cursor:grab}
+  #wrap.drag{cursor:grabbing}
+  #stage{position:absolute;top:0;left:0;transform-origin:0 0}
+  svg#edges{position:absolute;top:0;left:0;overflow:visible;pointer-events:none}
+  .gnode{position:absolute;border-radius:8px;border:1px solid var(--filebd);padding:7px 10px;font-size:12px;line-height:1.35;
+         cursor:pointer;user-select:none;background:var(--file);min-width:140px;max-width:250px;transition:box-shadow .1s}
+  .gnode:hover{box-shadow:0 0 0 2px var(--accent)}
+  .gnode .nm{font-weight:500;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--filefg)}
+  .gnode .nm i{flex:none}
+  .gnode .fl{font-size:11px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .gnode .toggle{margin-left:auto;flex:none;color:var(--muted)}
+  .gnode.dir{background:var(--dir);border-color:var(--dirbd)}.gnode.dir .nm{color:var(--dirfg)}
+  .gnode.write{background:var(--w);border-color:var(--wbd)}.gnode.write .nm{color:var(--wfg)}
+  .gnode.alert{background:var(--alert);border:2px solid var(--alertbd)}.gnode.alert .nm{color:var(--alertfg)}
+  .gnode.def{background:transparent;border:1px dashed var(--tert);opacity:.6}.gnode.def .nm{color:var(--tert)}
+  .gnode.dim{opacity:.18}.gnode.hit{box-shadow:0 0 0 2px var(--wfg)}
+  .badge{font-size:10px;padding:1px 6px;border-radius:10px;font-family:ui-monospace,Consolas,monospace;display:inline-flex;align-items:center;gap:3px}
+  .b-secret{background:#3a1414;color:var(--secret)}
+  .b-skip{background:var(--panel2);color:var(--tert);border:1px solid var(--line)}
+  .b-def{background:var(--panel2);color:var(--tert)}
+  .legend{position:absolute;top:10px;right:10px;z-index:5;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:11px}
+  .legend div{display:flex;align-items:center;gap:6px;margin:2px 0}
+  .sw{width:12px;height:12px;border-radius:3px;flex:none}
+  .detail{position:absolute;bottom:10px;left:10px;z-index:6;width:360px;max-height:64vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;font-size:12px;display:none}
+  .detail.show{display:block}
+  .detail .t{font-size:14px;color:#fff;word-break:break-all}
+  .detail .p{color:var(--muted);font-size:11px;word-break:break-all;margin:2px 0 10px}
+  .detail .kv{display:grid;grid-template-columns:90px 1fr;gap:3px 10px}
+  .detail .kv .k{color:var(--muted)}
+  .detail .x{float:right;cursor:pointer;color:var(--muted);font-size:18px;line-height:1}.detail .x:hover{color:#fff}
+  table.ace{width:100%;border-collapse:collapse;font-size:11px;margin-top:10px}
+  table.ace th{text-align:left;color:var(--muted);font-weight:500;padding:4px;border-bottom:1px solid var(--line)}
+  table.ace td{padding:4px;border-bottom:1px solid var(--panel2);vertical-align:top;word-break:break-word}
+  .ace .allow{color:var(--ok)}.ace .deny{color:var(--alertfg)}.ace .inh{color:var(--muted);font-size:10px}
+  .secblock{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+  .secblock>.h{display:flex;align-items:center;gap:6px;color:var(--secret);font-size:11px;margin-bottom:6px}
+  .sechit{margin-bottom:8px}
+  .sechit .lbl{display:flex;align-items:center;gap:6px;color:var(--secret);font-size:11px;margin-bottom:3px}
+  .sechit .reveal{margin-left:auto;background:var(--bg);border:1px solid var(--line);color:var(--muted);
+    padding:1px 7px;border-radius:5px;cursor:pointer;font:inherit;font-size:10px}
+  .sechit .reveal:hover{border-color:var(--accent);color:var(--accent)}
+  .sechit pre{margin:0;background:#0c0e12;border-radius:6px;padding:6px 8px;font-size:11px;white-space:pre-wrap;word-break:break-all;line-height:1.5;border:1px solid var(--line)}
+  .sechit pre .ln{color:var(--tert);user-select:none}
+  .sechit pre .secval{color:var(--secret);background:#3a1414;padding:0 2px;border-radius:2px}
+  .sechit pre .secval.masked{color:var(--tert);background:var(--panel2)}
+  .skipnote{margin-top:8px;color:var(--tert)}
+  #nav{position:absolute;bottom:10px;right:10px;z-index:6;display:flex;align-items:flex-end;gap:8px}
+  #nav .valbox{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:5px 9px;font-size:11px;color:var(--muted);line-height:1.6}
+  #nav .valbox b{color:var(--fg);font-weight:600}#nav .valbox .z{color:var(--accent)}
+  #nav .compass{background:var(--panel);border:1px solid var(--line);border-radius:8px;cursor:pointer;display:block}
+  #nav .compass:hover{border-color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>ACL-Graph+</h1><div class="meta">Wurzel: C:\ (Demo) &nbsp;|&nbsp; Benutzer: ANE\al &nbsp;|&nbsp; Demo</div></div>
+  <div class="stats">
+    <span class="chip">Knoten <b>8</b></span>
+    <span class="chip w">beschreibbar <b>2</b></span>
+    <span class="chip alert">Funde <b>1</b></span>
+    <span class="chip secret">Secrets <b>1</b></span>
+    <span class="chip">versteckt <b>0</b></span>
+  </div>
+</header>
+<div class="warnbar"><b>&#9888; Achtung:</b> Dieser Report enth&auml;lt potenzielle Klartext-Secrets (1 Datei(en)). Werte sind verdeckt &ndash; Klick auf &bdquo;einblenden&ldquo; zeigt sie. Nur lokal &ouml;ffnen, nicht weitergeben.</div>
+<div class="bar">
+  <button onclick="gZoom(1.25)">+</button><button onclick="gZoom(0.8)">&minus;</button>
+  <button onclick="gFit()">&#9678; Alles</button>
+  <button onclick="gExpandAll()">&#10063; Pfade entfalten</button>
+  <button onclick="gCollapse()">&#10064; Nur Funde</button>
+  <label><input type="checkbox" id="showdef" onchange="toggleDefaults(this.checked)"> Default-Ordner einblenden</label>
+  <input id="filter" type="text" placeholder="Filtern: config -test" oninput="applyFilter(this.value)" style="margin-left:auto">
+</div>
+<div class="fhint"><b>Filter:</b> wort = enthalten &middot; -wort = ausschlie&szlig;en &middot; mehrere mit Leerzeichen (z.B. <b>config -backup -test</b>)</div>
+<div id="wrap">
+  <div class="legend">
+    <div><span class="sw" style="background:var(--dir);border:1px solid var(--dirbd)"></span> Verzeichnis</div>
+    <div><span class="sw" style="background:var(--w);border:1px solid var(--wbd)"></span> beschreibbar</div>
+    <div><span class="sw" style="background:var(--alert);border:2px solid var(--alertbd)"></span> Fund (writable+sensibel)</div>
+    <div><span class="sw" style="background:#3a1414"></span> &#128273; Secret im Inhalt</div>
+    <div><span class="sw" style="background:transparent;border:1px dashed var(--tert)"></span> Default-Ordner (unver&auml;ndert)</div>
+    <div><span class="sw" style="background:var(--panel2);border:1px solid var(--line)"></span> nicht gescannt (zu gro&szlig;)</div>
+  </div>
+  <svg id="edges"></svg>
+  <div id="stage"></div>
+  <div class="detail" id="detail"></div>
+  <div id="nav">
+    <div class="valbox">x <b id="cx">0</b><br>y <b id="cy">0</b><br>z <span class="z" id="cz">100%</span></div>
+    <svg class="compass" id="compass" width="60" height="60" viewBox="0 0 60 60" onclick="gFit()" role="img" aria-label="Position zur&uuml;cksetzen">
+      <defs><marker id="ah" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M2 1L8 5L2 9" fill="none" stroke="#7f8896" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+      <line x1="30" y1="53" x2="30" y2="7" stroke="#7f8896" stroke-width="1" marker-end="url(#ah)"/>
+      <line x1="7" y1="30" x2="53" y2="30" stroke="#7f8896" stroke-width="1" marker-end="url(#ah)"/>
+      <text x="34" y="13" font-family="serif" font-style="italic" font-size="10" fill="#7f8896">y</text>
+      <text x="49" y="26" font-family="serif" font-style="italic" font-size="10" fill="#7f8896">x</text>
+      <circle id="cdot" cx="30" cy="30" r="3.5" fill="#5ab0ff" stroke="#171a21" stroke-width="1.5" style="transition:cx .1s,cy .1s"/>
+    </svg>
+  </div>
+</div>
+
+<script>
+const NODES = [{"isDir":true,"hidden":false,"writable":false,"alert":false,"aclWeak":false,"denied":false,"owner":"x","attrs":"Archive","size":null,"aces":[],"aclError":null,"kind":"dir","isDefault":false,"defaultClean":false,"secrets":[],"skipped":null,"level":0,"id":1,"parent":0,"name":"C:\\inetpub","full":"C:\\inetpub","flags":["R","X"]},{"isDir":true,"hidden":false,"writable":true,"alert":false,"aclWeak":false,"denied":false,"owner":"x","attrs":"Archive","size":null,"aces":[],"aclError":null,"kind":"dir","isDefault":false,"defaultClean":false,"secrets":[],"skipped":null,"level":0,"id":2,"parent":1,"name":"wwwroot","full":"C:\\inetpub\\wwwroot","flags":["R","W","X"]},{"isDir":false,"hidden":false,"writable":true,"alert":true,"aclWeak":false,"denied":false,"owner":"x","attrs":"Archive","size":null,"aces":[],"aclError":null,"kind":"config","isDefault":false,"defaultClean":false,"secrets":[{"type":"ConnectionString","line":14,"ctx":["  <connectionStrings>","    <add connectionString=\"Server=db;Password=S3cr3t!Pass\" />","  </connectionStrings>"],"hitLine":1,"hitFrom":46,"hitTo":57}],"skipped":null,"level":0,"id":3,"parent":2,"name":"web.config","full":"C:\\inetpub\\wwwroot\\web.config","flags":["R","W"]},{"isDir":false,"hidden":false,"writable":false,"alert":false,"aclWeak":false,"denied":false,"owner":"x","attrs":"Archive","size":null,"aces":[],"aclError":null,"kind":"file","isDefault":false,"defaultClean":false,"secrets":[],"skipped":null,"level":0,"id":7,"parent":2,"name":"index.html","full":"C:\\inetpub\\wwwroot\\index.html","flags":["R"]},{"isDir":true,"hidden":false,"writable":false,"alert":false,"aclWeak":false,"denied":false,"owner":"x","attrs":"Archive","size":null,"aces":[],"aclError":null,"kind":"dir","isDefault":true,"defaultClean":true,"secrets":[],"skipped":null,"level":0,"id":8,"parent":0,"name":"C:\\Windows","full":"C:\\Windows","flags":["R","X"]},{"isDir":true,"hidden":false,"writable":false,"alert":false,"aclWeak":false,"denied":false,"owner":"x","attrs":"Archive","size":null,"aces":[],"aclError":null,"kind":"dir","isDefault":true,"defaultClean":true,"secrets":[],"skipped":null,"level":0,"id":9,"parent":8,"name":"WinSxS","full":"C:\\Windows\\WinSxS","flags":["R","X"]},{"isDir":true,"hidden":false,"writable":false,"alert":false,"aclWeak":false,"denied":false,"owner":"x","attrs":"Archive","size":null,"aces":[],"aclError":null,"kind":"dir","isDefault":true,"defaultClean":true,"secrets":[],"skipped":null,"level":0,"id":10,"parent":8,"name":"System32","full":"C:\\Windows\\System32","flags":["R","X"]},{"isDir":true,"hidden":false,"writable":false,"alert":false,"aclWeak":false,"denied":false,"owner":"x","attrs":"Archive","size":null,"aces":[],"aclError":null,"kind":"dir","isDefault":true,"defaultClean":true,"secrets":[],"skipped":null,"level":0,"id":11,"parent":10,"name":"drivers","full":"C:\\Windows\\System32\\drivers","flags":["R","X"]}];
+const CURRENT_USER = "ANE\\al";
+const byId={},kids={};
+NODES.forEach(n=>{byId[n.id]=n;(kids[n.parent]=kids[n.parent]||[]).push(n);});
+NODES.forEach(n=>n._onPath=false);
+NODES.filter(n=>n.alert||(n.secrets&&n.secrets.length)).forEach(a=>{let c=a.id;while(c&&byId[c]){byId[c]._onPath=true;c=byId[c].parent;}});
+NODES.forEach(n=>{n._expanded=n._onPath&&n.isDir;n._showAll=false;n._m=false;n._md=false;});
+if(!NODES.some(n=>n.alert||(n.secrets&&n.secrets.length))){(kids[0]||[]).forEach(r=>{if(!r.defaultClean)r._expanded=r.isDir;});}
+
+const stage=document.getElementById('stage'),edges=document.getElementById('edges'),
+      wrap=document.getElementById('wrap'),detail=document.getElementById('detail');
+const COLW=260,ROWH=64;
+let term={inc:[],exc:[]};
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function flagStr(f){return f&&f.length?'['+f.join(' ')+']':'-- kein Zugriff --';}
+function gcls(n){
+  if(n.isDir&&n.isDefault&&n.defaultClean)return 'def';
+  return n.alert?'alert':((n.secrets&&n.secrets.length)?'alert':(n.writable?'write':(n.isDir?'dir':'file')));
+}
+function kindIcon(n){
+  if(n.isDir)return n._expanded?'&#128194;':'&#128193;';
+  if(n.kind==='config')return '&#9881;';
+  if(n.kind==='script')return '&#62;_';
+  if(n.kind==='key')return '&#128273;';
+  if(n.kind==='archive')return '&#128230;';
+  return n.hidden?'&#128065;':'&#128196;';
+}
+
+function parseFilter(v){
+  const inc=[],exc=[];
+  v.toLowerCase().split(/\s+/).filter(Boolean).forEach(t=>{
+    if(t.startsWith('-')&&t.length>1)exc.push(t.slice(1));else inc.push(t);
+  });
+  return {inc,exc};
+}
+function nodeMatches(n){
+  const nm=n.name.toLowerCase();
+  if(term.exc.some(e=>nm.includes(e)))return false;
+  if(term.inc.length&&!term.inc.some(i=>nm.includes(i)))return false;
+  return true;
+}
+const filtering=()=>term.inc.length||term.exc.length;
+
+function applyFilter(v){
+  term=parseFilter(v);
+  NODES.forEach(n=>{n._m=false;n._md=false;});
+  if(filtering()){
+    NODES.forEach(n=>{n._m=nodeMatches(n);});
+    NODES.filter(n=>n._m).forEach(m=>{let c=byId[m.parent];while(c){c._md=true;c._expanded=true;c._showAll=true;c=byId[c.parent];}});
+  }else{
+    NODES.forEach(n=>{n._expanded=n._onPath&&n.isDir;n._showAll=false;});
+  }
+  render();
+}
+
+let bounds={maxX:0,maxY:0};
+function buildLayout(){
+  const rows=[];let rowCursor=0;const filt=filtering();const showDef=document.getElementById('showdef').checked;
+  function visF(n){return n._m||n._md;}
+  function walk(n,depth){
+    n._depth=depth;const ch=kids[n.id]||[];
+    if(n.isDir&&n._expanded&&ch.length){
+      const start=rowCursor;
+      let shown,hidden=[];
+      if(filt){shown=ch.filter(visF);}
+      else{
+        const interesting=c=>c.alert||(c.secrets&&c.secrets.length)||c.writable||c._onPath||c.isDir;
+        shown=n._showAll?ch:ch.filter(interesting);
+        hidden=n._showAll?[]:ch.filter(c=>!interesting(c));
+      }
+      shown.forEach(c=>walk(c,depth+1));
+      if(hidden.length){rows.push({ellipsis:true,depth:depth+1,row:rowCursor,count:hidden.length,parent:n.id});rowCursor++;}
+      n._row=(start+rowCursor-1)/2;
+    }else{n._row=rowCursor;rowCursor++;}
+    rows.push({node:n,depth,row:n._row});
+  }
+  (kids[0]||[]).forEach(r=>{
+    if(filt&&!visF(r))return;
+    walk(r,0);
+  });
+  return rows;
+}
+
+let selId=null;
+function render(){
+  stage.innerHTML='';bounds={maxX:0,maxY:0};
+  const showDef=document.getElementById('showdef').checked;
+  buildLayout().forEach(r=>{
+    const x=20+r.depth*COLW,y=20+r.row*ROWH;
+    const d=document.createElement('div');
+    if(r.ellipsis){
+      d.className='gnode';d.style.cssText='left:'+x+'px;top:'+y+'px;background:transparent;border:1px dashed var(--tert);min-width:0;color:var(--tert)';
+      d.innerHTML='<div class="nm" style="color:var(--tert);font-weight:400">&hellip; '+r.count+' weitere</div>';
+      d.onclick=e=>{e.stopPropagation();byId[r.parent]._showAll=true;renderKeepingNode(r.parent);};
+    }else{
+      const n=r.node;
+      d.className='gnode '+gcls(n);
+      if(filtering()){if(n._m)d.classList.add('hit');else d.classList.add('dim');}
+      d.style.left=x+'px';d.style.top=y+'px';d.dataset.id=n.id;
+      const ch=kids[n.id]||[];
+      const tog=n.isDir&&ch.length?('<span class="toggle">'+(n._expanded?'&#9662;':'&#9656;')+'</span>'):'';
+      let badges='';
+      if(n.secrets&&n.secrets.length)badges+='<span class="badge b-secret">&#128273; '+n.secrets.length+'</span>';
+      if(n.skipped)badges+='<span class="badge b-skip">&#128065; n.gescannt</span>';
+      if(n.isDir&&n.isDefault&&n.defaultClean&&!n._expanded&&ch.length)badges+='<span class="badge b-def">'+ch.length+' eingeklappt</span>';
+      d.innerHTML='<div class="nm">'+kindIcon(n)+' '+esc(n.name)+tog+'</div><div class="fl">'+esc(flagStr(n.flags))+badges+'</div>';
+      d.onclick=e=>{e.stopPropagation();selectNode(n,d);if(n.isDir&&ch.length){n._expanded=!n._expanded;renderKeepingNode(n.id);}};
+    }
+    stage.appendChild(d);
+    requestAnimationFrame(()=>{bounds.maxX=Math.max(bounds.maxX,x+d.offsetWidth);bounds.maxY=Math.max(bounds.maxY,y+d.offsetHeight);});
+  });
+  if(selId){const el=stage.querySelector('.gnode[data-id="'+selId+'"]');if(el)el.classList.add('sel');}
+  setTimeout(drawEdges,0);
+}
+function renderKeepingNode(id){
+  const before=stage.querySelector('.gnode[data-id="'+id+'"]');
+  const oldX=before?before.offsetLeft:null,oldY=before?before.offsetTop:null;
+  render();
+  if(oldX==null)return;
+  requestAnimationFrame(()=>{const after=stage.querySelector('.gnode[data-id="'+id+'"]');if(!after)return;tx+=(oldX-after.offsetLeft)*scale;ty+=(oldY-after.offsetTop)*scale;apply();});
+}
+function drawEdges(){
+  let p='';
+  stage.querySelectorAll('.gnode[data-id]').forEach(el=>{
+    const n=byId[el.dataset.id];if(!n||n.parent===0)return;
+    const pe=stage.querySelector('.gnode[data-id="'+n.parent+'"]');if(!pe)return;
+    const x1=pe.offsetLeft+pe.offsetWidth,y1=pe.offsetTop+22,x2=el.offsetLeft,y2=el.offsetTop+22,mx=(x1+x2)/2;
+    p+='<path d="M'+x1+' '+y1+' C'+mx+' '+y1+','+mx+' '+y2+','+x2+' '+y2+'" fill="none" stroke="#2a2f3a" stroke-width="1"/>';
+  });
+  edges.innerHTML=p;
+}
+
+function maskVal(s){return s.replace(/./g,'\u2022');}
+function selectNode(n,el){
+  stage.querySelectorAll('.gnode.sel').forEach(e=>e.classList.remove('sel'));el.classList.add('sel');selId=n.id;
+  let aces=(n.aces||[]).map(a=>'<tr><td class="'+(a.type==='Allow'?'allow':'deny')+'">'+a.type+'</td><td>'+esc(a.id)+'</td><td>'+esc(a.rights)+(a.isInh?' <span class="inh">(geerbt)</span>':'')+'</td></tr>').join('')||'<tr><td colspan="3" style="color:var(--muted)">'+(n.aclError?esc(n.aclError):'keine ACEs')+'</td></tr>';
+  let html='<span class="x" onclick="closeD()">&times;</span>'+
+   '<div class="t">'+kindIcon(n)+' '+esc(n.name)+'</div><div class="p">'+esc(n.full)+'</div>'+
+   (n.alert?'<div style="color:var(--alertfg);margin-bottom:6px">&#9888; beschreibbar in sensiblem Pfad &ndash; Hijack-Vektor</div>':'')+
+   (n.aclWeak?'<div style="color:var(--weakfg);margin-bottom:6px">&#9888; WRITE_DAC / TAKE_OWNERSHIP</div>':'')+
+   '<div class="kv"><span class="k">Effektiv</span><span>'+esc(flagStr(n.flags))+' ('+esc(CURRENT_USER)+')</span>'+
+   '<span class="k">Typ</span><span>'+esc(n.kind||(n.isDir?'dir':'file'))+'</span>'+
+   '<span class="k">Owner</span><span>'+esc(n.owner||'?')+'</span>'+
+   (n.size!=null?'<span class="k">Gr&ouml;&szlig;e</span><span>'+n.size.toLocaleString()+' B</span>':'')+
+   '</div>';
+  if(n.skipped)html+='<div class="skipnote">&#128065; Inhalt nicht gescannt: '+esc(n.skipped)+'</div>';
+  if(n.secrets&&n.secrets.length){
+    html+='<div class="secblock"><div class="h">&#128273; '+n.secrets.length+' Secret-Treffer</div>';
+    n.secrets.forEach((s,si)=>{
+      const lines=s.ctx.map((l,i)=>{
+        const lineNo=s.line - s.hitLine + i;
+        if(i===s.hitLine){
+          const before=esc(l.slice(0,s.hitFrom)),val=l.slice(s.hitFrom,s.hitTo),after=esc(l.slice(s.hitTo));
+          return '<span class="ln">'+lineNo+'</span>  '+before+'<span class="secval masked" data-real="'+esc(val)+'" data-mask="'+esc(maskVal(val))+'">'+esc(maskVal(val))+'</span>'+after;
+        }
+        return '<span class="ln">'+lineNo+'</span>  '+esc(l);
+      }).join('\n');
+      html+='<div class="sechit"><div class="lbl">&#128273; '+esc(s.type)+' &middot; Zeile '+s.line+
+            '<button class="reveal" onclick="toggleSecret(this)">einblenden</button></div><pre>'+lines+'</pre></div>';
+    });
+    html+='</div>';
+  }
+  html+='<table class="ace"><tr><th>Typ</th><th>Identit&auml;t</th><th>Rechte</th></tr>'+aces+'</table>';
+  detail.innerHTML=html;detail.classList.add('show');
+}
+function toggleSecret(btn){
+  const pre=btn.closest('.sechit').querySelector('pre');
+  const sv=pre.querySelector('.secval');
+  if(!sv)return;
+  const masked=sv.classList.contains('masked');
+  sv.textContent=masked?sv.dataset.real:sv.dataset.mask;
+  sv.classList.toggle('masked',!masked);
+  btn.textContent=masked?'verdecken':'einblenden';
+}
+function closeD(){detail.classList.remove('show');stage.querySelectorAll('.gnode.sel').forEach(e=>e.classList.remove('sel'));selId=null;}
+function gExpandAll(){NODES.forEach(n=>{if(n.isDir){n._expanded=true;n._showAll=true;}});render();}
+function gCollapse(){NODES.forEach(n=>{n._expanded=n._onPath&&n.isDir;n._showAll=false;});render();closeD();}
+function toggleDefaults(on){
+  // saubere Default-Ordner gezielt auf-/zuklappen
+  NODES.forEach(n=>{ if(n.isDir&&n.isDefault&&n.defaultClean){ n._expanded=on; if(on)n._showAll=true; } });
+  render();
+}
+
+let scale=1,tx=0,ty=0;
+function apply(){stage.style.transform='translate('+tx+'px,'+ty+'px) scale('+scale+')';edges.style.transform=stage.style.transform;updateCoords();}
+function updateCoords(){
+  const r=wrap.getBoundingClientRect();
+  const wx=Math.round((r.width/2-tx)/scale),wy=Math.round((r.height/2-ty)/scale);
+  const cx=document.getElementById('cx'),cy=document.getElementById('cy'),cz=document.getElementById('cz'),dot=document.getElementById('cdot');
+  if(cx)cx.textContent=wx;if(cy)cy.textContent=wy;if(cz)cz.textContent=Math.round(scale*100)+'%';
+  if(dot){
+    const nx=Math.max(10,Math.min(50,30+(wx/Math.max(1,bounds.maxX))*40-20+20));
+    const ny=Math.max(10,Math.min(50,30+(wy/Math.max(1,bounds.maxY))*40-20+20));
+    dot.setAttribute('cx',nx);dot.setAttribute('cy',ny);
+  }
+}
+function gZoom(f){const r=wrap.getBoundingClientRect();zoomAt(r.width/2,r.height/2,f);}
+function zoomAt(cx,cy,f){const ns=Math.min(2.5,Math.max(0.2,scale*f));tx=cx-(cx-tx)*(ns/scale);ty=cy-(cy-ty)*(ns/scale);scale=ns;apply();}
+function gFit(){const r=wrap.getBoundingClientRect();const s=Math.min(r.width/(bounds.maxX+40),r.height/(bounds.maxY+40),1.4);scale=s>0?s:1;tx=20;ty=Math.max(10,(r.height-bounds.maxY*scale)/2);apply();}
+
+let dragging=false,sx,sy;
+wrap.addEventListener('mousedown',e=>{if(e.target.closest('.gnode')||e.target.closest('.detail')||e.target.closest('.legend')||e.target.closest('#nav'))return;dragging=true;wrap.classList.add('drag');sx=e.clientX-tx;sy=e.clientY-ty;});
+window.addEventListener('mousemove',e=>{if(!dragging)return;tx=e.clientX-sx;ty=e.clientY-sy;apply();});
+window.addEventListener('mouseup',()=>{dragging=false;wrap.classList.remove('drag');});
+wrap.addEventListener('wheel',e=>{e.preventDefault();const r=wrap.getBoundingClientRect();zoomAt(e.clientX-r.left,e.clientY-r.top,e.deltaY<0?1.12:0.89);},{passive:false});
+
+setTimeout(()=>{render();setTimeout(gFit,80);},40);
+</script>
+</body>
+</html>
