@@ -1,4 +1,13 @@
-# ACL-Graph+
+# ACL-Graph
+"" ENG """
+Recursive directory scanner for Windows that determines the **effective access permissions** of the
+user running the program and displays them as an interactive, zoomable, and searchable
+HTML node graph. Focus: quickly see **where you’re allowed to write** and
+**which configuration files contain secrets** — for penetration testers (hijack vectors)
+and administrators (misconfigurations).
+
+U are welcome to expand the feature and to help improve the idea
+"""
 
 Rekursiver Verzeichnis-Scanner für Windows, der **effektive Zugriffsrechte** des
 ausführenden Benutzers ermittelt und als interaktiven, zoom-/durchsuchbaren
