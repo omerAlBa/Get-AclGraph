@@ -127,13 +127,13 @@ foreach ($r in $SecretRegex) { $secretRules += @{ Name='Custom'; Rx=$r } }
 $maxBytes = $MaxScanMB * 1MB
 
 function Get-EffectiveRights {
-    param($Acl)
+    # Erwartet ACE-Regeln bereits in SID-Form (siehe Scan-Item). Dadurch
+    # entfaellt das teure .Translate() pro ACE/Knoten komplett.
+    param($Rules)
     $allow = 0; $deny = 0
-    if (-not $Acl) { return [pscustomobject]@{ Mask=0; Denied=$false } }
-    foreach ($ace in $Acl.Access) {
-        $sid = $null
-        try { $sid = $ace.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value }
-        catch { try { $sid = $ace.IdentityReference.Value } catch { continue } }
+    if (-not $Rules) { return [pscustomobject]@{ Mask=0; Denied=$false } }
+    foreach ($ace in $Rules) {
+        $sid = $ace.IdentityReference.Value
         if ($mySids.Contains($sid)) {
             $rights = [int]$ace.FileSystemRights
             if ($ace.AccessControlType -eq 'Allow') { $allow = $allow -bor $rights }
@@ -253,6 +253,9 @@ function Find-Secrets {
 $nodeId = 0
 $nodes  = New-Object System.Collections.Generic.List[object]
 $skippedDirs = 0
+# Alle waehrend des Scans gesehenen SIDs (Owner + ACE). Werden NICHT pro Knoten,
+# sondern am Ende EINMAL gebuendelt in Namen aufgeloest.
+$allSids = New-Object System.Collections.Generic.HashSet[string]
 
 function Scan-Item {
     param($Item, [int]$Level, [int]$ParentId)
@@ -267,17 +270,28 @@ function Scan-Item {
     try { $acl = Get-Acl -LiteralPath $full -ErrorAction Stop }
     catch { $aclError = $_.Exception.Message }
 
-    $eff   = Get-EffectiveRights -Acl $acl
+    # ACEs + Owner bewusst in SID-Form holen: .Access/.Owner wuerden hier pro
+    # Knoten eine Namensaufloesung (ggf. Domaenen-/Netzwerk-Lookup) ausloesen.
+    $rulesSid = $null
+    if ($acl) {
+        try { $rulesSid = $acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]) } catch {}
+    }
+
+    $eff   = Get-EffectiveRights -Rules $rulesSid
     $flags = Convert-RightsToFlags -Mask $eff.Mask
 
     $owner = $null
-    if ($acl) { try { $owner = $acl.Owner } catch {} }
+    if ($acl) {
+        try { $owner = $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value; [void]$script:allSids.Add($owner) } catch {}
+    }
 
     $aces = @()
-    if ($acl) {
-        foreach ($ace in $acl.Access) {
+    if ($rulesSid) {
+        foreach ($ace in $rulesSid) {
+            $sid = $ace.IdentityReference.Value
+            [void]$script:allSids.Add($sid)
             $aces += [pscustomobject]@{
-                id=[string]$ace.IdentityReference; type=[string]$ace.AccessControlType
+                sid=$sid; type=[string]$ace.AccessControlType
                 rights=[string]$ace.FileSystemRights; inh=[string]$ace.InheritanceFlags; isInh=$ace.IsInherited
             }
         }
@@ -366,6 +380,27 @@ Write-Host "Knoten gescannt: $($nodes.Count)" -ForegroundColor Green
 if ($skippedDirs) { Write-Host "Per Skip-Liste uebersprungen: $skippedDirs" -ForegroundColor DarkYellow }
 $secretFiles = ($nodes | Where-Object { $_.secrets -and $_.secrets.Count -gt 0 }).Count
 if ($secretFiles) { Write-Host "Dateien mit Secret-Verdacht: $secretFiles" -ForegroundColor Red }
+
+# ---------------------------------------------------------------------------
+# SID-Aufloesung gebuendelt (Phase B): jede eindeutige SID genau EINMAL in
+# einen Namen uebersetzen, statt pro ACE/Knoten. Spart bei Domaenen-Lookups
+# massiv Zeit (Dutzende statt Zigtausende Aufloesungen).
+# ---------------------------------------------------------------------------
+$sidName = @{}
+foreach ($sid in $allSids) {
+    try   { $sidName[$sid] = ([System.Security.Principal.SecurityIdentifier]$sid).Translate([System.Security.Principal.NTAccount]).Value }
+    catch { $sidName[$sid] = $sid }   # nicht aufloesbare SID -> SID-String anzeigen
+}
+Write-Host "Eindeutige SIDs aufgeloest: $($allSids.Count)" -ForegroundColor Green
+
+# Phase C: aufgeloeste Namen in die Knoten einsetzen, damit das HTML
+# (liest owner und ace.id) unveraendert funktioniert.
+foreach ($n in $nodes) {
+    if ($n.owner) { $n.owner = $sidName[$n.owner] }
+    foreach ($a in $n.aces) {
+        $a | Add-Member -NotePropertyName id -NotePropertyValue ($sidName[$a.sid]) -Force
+    }
+}
 
 # ---------------------------------------------------------------------------
 # JSON fuer das HTML serialisieren
