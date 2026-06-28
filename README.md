@@ -1,193 +1,187 @@
-# ACL-Graph
-"" ENG """
-Recursive directory scanner for Windows that determines the **effective access permissions** of the
-user running the program and displays them as an interactive, zoomable, and searchable
-HTML node graph. Focus: quickly see **where you’re allowed to write** and
-**which configuration files contain secrets** — for penetration testers (hijack vectors)
-and administrators (misconfigurations).
+# ACL-Graph+
 
-U are welcome to expand the feature and to help improve the idea
-"""
+A recursive directory scanner for Windows that determines the **effective access
+rights** of the executing user and renders them as an interactive, zoomable and
+searchable HTML node graph. Focus: quickly see **where you can write** and
+**which config files contain secrets** — for pentesters (hijack vectors) and
+admins (misconfigurations).
 
-Rekursiver Verzeichnis-Scanner für Windows, der **effektive Zugriffsrechte** des
-ausführenden Benutzers ermittelt und als interaktiven, zoom-/durchsuchbaren
-HTML-Knotengraph ausgibt. Fokus: schnell sehen, **wo man schreiben darf** und
-**welche Konfig-Dateien Secrets enthalten** — für Pentester (Hijack-Vektoren)
-und Admins (Fehlkonfigurationen).
-
-Reines PowerShell, keine Abhängigkeiten. Läuft ab Windows 10 / Server 2016.
+Pure PowerShell, no dependencies. Runs on Windows 10 / Server 2016 and later.
 
 ---
 
-## Schnellstart
+## Quick start
 
 ```powershell
-# Einfachster Aufruf: aktuelles Verzeichnis scannen, report neben dem Skript
+# Simplest invocation: scan the current directory, report next to the script
 .\Get-AclGraph.ps1
 
-# Konkreten Pfad scannen, Ausgabedatei festlegen
+# Scan a specific path, set the output file
 .\Get-AclGraph.ps1 -Path 'C:\inetpub' -OutFile report.html
 ```
 
-Danach die erzeugte HTML-Datei im Browser öffnen. Es wird kein Server benötigt —
-die Datei ist eigenständig (HTML + CSS + JS in einer Datei).
+Then open the generated HTML file in a browser. No server is required — the file
+is self-contained (HTML + CSS + JS in a single file).
 
-> **Tipp:** Beim ersten Lauf auf großen Laufwerken `-Depth` setzen oder einen
-> Unterordner als `-Path` wählen. Jede Datei kostet einen `Get-Acl`-Aufruf, ein
-> voller `C:\`-Scan kann lange dauern.
+> **Tip:** On the first run against large drives, set `-Depth` or pick a
+> subfolder as `-Path`. Every file costs one `Get-Acl` call, so a full `C:\`
+> scan can take a long time.
 
 ---
 
-## Was der Report zeigt
+## What the report shows
 
-Beim Öffnen sind nur die **Funde** und die Pfade dorthin aufgeklappt — der Rest
-bleibt eingeklappt, damit auch große Bäume lesbar sind.
+When opened, only the **findings** and the paths leading to them are expanded —
+everything else stays collapsed so that even large trees remain readable.
 
-| Darstellung | Bedeutung |
+| Display | Meaning |
 |---|---|
-| Blauer Knoten | Verzeichnis |
-| Gelber Knoten | beschreibbar (writable für dich) |
-| Roter Knoten (2px Rand) | **Fund**: beschreibbar **und** in sensiblem Pfad (Hijack-Vektor) |
-| Schlüssel-Badge `🔑 N` | Datei enthält N mögliche Secrets im Inhalt |
-| Graue, gestrichelte Box | Default-/Systemordner, unverändert (eingeklappt) |
-| Badge „n.gescannt" | Inhalt nicht auf Secrets geprüft (z.B. zu groß) |
-| `… N weitere` | gebündelte, uninteressante Dateien — Klick entfaltet sie |
+| Blue node | Directory |
+| Yellow node | Writable (writable by you) |
+| Red node (2px border) | **Finding**: writable **and** in a sensitive path (hijack vector) |
+| Key badge `🔑 N` | File contains N potential secrets in its content |
+| Grey, dashed box | Default/system folder, unchanged (collapsed) |
+| Badge "n.gescannt" | Content not checked for secrets (e.g. too large) |
+| `… N weitere` | Bundled, uninteresting files — click to expand them |
 
-Das Rechte-Kürzel unter jedem Namen: `R` Lesen, `W` Schreiben, `X` Ausführen,
-`D` Löschen, `P` Rechte ändern (WRITE_DAC), `O` Besitz übernehmen (TAKE_OWNERSHIP),
-`FULL` Vollzugriff.
+The rights abbreviation below each name: `R` read, `W` write, `X` execute,
+`D` delete, `P` change permissions (WRITE_DAC), `O` take ownership (TAKE_OWNERSHIP),
+`FULL` full control.
 
 ---
 
-## Bedienung im Browser
+## Using it in the browser
 
 **Navigation**
-- Mausrad = zoomen, Ziehen mit der Maus = verschieben (pannen).
-- `+` / `−` / „Alles" oben = zoomen bzw. ganzen Graph einpassen.
-- Kompass-Kreuz unten rechts: der blaue Punkt zeigt, wo im Baum die Mitte deines
-  Sichtfensters liegt; der Kasten daneben nennt `x`, `y` und Zoom (`z`).
-  **Klick aufs Kreuz = zurück zur Gesamtansicht.**
+- Mouse wheel = zoom, drag with the mouse = pan.
+- `+` / `−` / "Alles" at the top = zoom in/out or fit the whole graph.
+- Compass cross at the bottom right: the blue dot shows where in the tree the
+  center of your viewport sits; the box next to it reports `x`, `y` and zoom (`z`).
+  **Click the cross = back to the overview.**
 
-**Aufklappen**
-- Klick auf ein Verzeichnis = Detail-Panel öffnen **und** Kinder auf-/zuklappen.
-  Der angeklickte Knoten bleibt dabei an seiner Bildschirmposition.
-- „Pfade entfalten" = alles aufklappen · „Nur Funde" = zurück auf die Treffer.
-- Klick auf `… N weitere` = die gebündelten Dateien einblenden.
+**Expanding**
+- Click a directory = open the detail panel **and** expand/collapse its children.
+  The clicked node stays at its on-screen position while doing so.
+- "Pfade entfalten" = expand everything · "Nur Funde" = back to the findings.
+- Click `… N weitere` = reveal the bundled files.
 
-**Filter** (Feld oben rechts)
-- `config` → nur Knoten, deren Name „config" enthält.
-- `config -test` → enthält „config", aber **nicht** „test".
-- `-backup` → alles **außer** „backup".
-- Mehrere Begriffe mit Leerzeichen kombinierbar: `config -backup -test`.
-- Die Suche durchsucht auch **eingeklappte** Bereiche und klappt Treffer auf;
-  Feld leeren stellt den Ausgangszustand wieder her.
+**Filter** (field at the top right)
+- `config` → only nodes whose name contains "config".
+- `config -test` → contains "config", but **not** "test".
+- `-backup` → everything **except** "backup".
+- Multiple terms can be combined with spaces: `config -backup -test`.
+- The search also looks inside **collapsed** areas and expands matches;
+  clearing the field restores the initial state.
 
-**Default-Ordner**
-- Unveränderte Systemordner sind grau und eingeklappt. Checkbox
-  „Default-Ordner einblenden" holt sie bei Bedarf in die Ansicht.
+**Default folders**
+- Unchanged system folders are grey and collapsed. The checkbox
+  "Default-Ordner einblenden" brings them into view when needed.
 
-**Secrets ansehen**
-- Datei mit Schlüssel-Badge anklicken → im Detail-Panel erscheint der Treffer mit
-  einer Zeile Kontext davor/danach und Zeilennummer. Der Secret-Wert ist
-  **verdeckt** (Punkte); Button „einblenden" zeigt ihn, „verdecken" blendet ihn
-  wieder aus.
+**Viewing secrets**
+- Click a file with a key badge → the detail panel shows the match with one line
+  of context before/after and a line number. The secret value is **masked**
+  (dots); the "einblenden" button reveals it, "verdecken" hides it again.
 
-> **⚠ Wichtig:** Wenn der Report Secrets enthält, steht der Klartext (verdeckt)
-> im HTML. Die Datei **nur lokal öffnen, nicht weitergeben**. Eine rote Warnleiste
-> im Report weist darauf hin.
+> **⚠ Important:** If the report contains secrets, the cleartext (masked) lives
+> in the HTML. **Open the file locally only, do not share it.** A red warning
+> bar in the report points this out.
 
 ---
 
-## Parameter
+## Parameters
 
-| Parameter | Typ | Default | Beschreibung |
+| Parameter | Type | Default | Description |
 |---|---|---|---|
-| `-Path` | string | aktuelles Verzeichnis | Wurzelverzeichnis des Scans. |
-| `-OutFile` | string | `.\aclgraph.html` | Zieldatei für den HTML-Report. |
-| `-Depth` | int | `0` (unbegrenzt) | Maximale Rekursionstiefe. `0` = kein Limit. |
-| `-Skip` | string[] | leer | Regex-Muster für Ordner/Namen, die beim Scan **nicht betreten** werden. |
-| `-ScanExtensions` | string[] | leer | **Zusätzliche** Dateiendungen (ohne Punkt) für den Secret-Inhalts-Scan. |
-| `-SecretRegex` | string[] | leer | **Zusätzliche** eigene Regex-Muster für die Secret-Erkennung. |
-| `-MaxScanMB` | int | `5` | Dateien größer als dieser Wert (MB) werden beim Inhalts-Scan übersprungen und markiert. |
-| `-DefaultDirs` | string[] | Windows-Systemordner | Regex-Muster, die als „Default-/Standard-Ordner" gelten. |
-| `-ExcludeReparse` | switch | an | Reparse-Points (Symlinks/Junctions) **nicht** verfolgen. |
+| `-Path` | string | current directory | Root directory of the scan. |
+| `-OutFile` | string | `.\aclgraph.html` | Target file for the HTML report. |
+| `-Depth` | int | `0` (unlimited) | Maximum recursion depth. `0` = no limit. |
+| `-Skip` | string[] | empty | Regex patterns for folders/names that are **not entered** during the scan. |
+| `-ScanExtensions` | string[] | empty | **Additional** file extensions (without dot) for the secret content scan. |
+| `-SecretRegex` | string[] | empty | **Additional** custom regex patterns for secret detection. |
+| `-MaxScanMB` | int | `5` | Files larger than this value (MB) are skipped during the content scan and marked. |
+| `-DefaultDirs` | string[] | Windows system folders | Regex patterns treated as "default/standard folders". |
+| `-ExcludeReparse` | switch | on | Do **not** follow reparse points (symlinks/junctions). |
 
-### Standardwerte im Detail
+### Default values in detail
 
-**Secret-Scan-Endungen (immer aktiv):**
+**Secret-scan extensions (always active):**
 `config`, `env`, `ini`, `json`, `xml`, `ps1`, `bat`, `yaml`, `yml`
-— `-ScanExtensions` ergänzt diese Liste.
+— `-ScanExtensions` adds to this list.
 
-**Secret-Muster (immer aktiv):**
-Passwort · ConnectionString · API-Key · AWS-Key (`AKIA…`) · Private-Key
+**Secret patterns (always active):**
+Password · ConnectionString · API key · AWS key (`AKIA…`) · Private key
 (`-----BEGIN … PRIVATE KEY-----`) · Token/Bearer
-— `-SecretRegex` ergänzt diese Liste.
+— `-SecretRegex` adds to this list.
 
-**Default-Ordner (Standard):**
+**Default folders (standard):**
 `C:\Windows`, `WinSxS`, `System32`, `SysWOW64`, `Microsoft.NET`, `assembly`,
-`Installer`, `Common Files`. Diese werden nur dann grau & eingeklappt dargestellt,
-wenn in ihrem Teilbaum **kein** Fund, **kein** Secret und **keine** beschreibbare
-Datei liegt — sonst bleiben sie normal sichtbar.
+`Installer`, `Common Files`. These are shown grey & collapsed only when their
+subtree contains **no** finding, **no** secret and **no** writable file —
+otherwise they stay normally visible.
 
 ---
 
-## Beispiele
+## Examples
 
 ```powershell
-# Webserver-Verzeichnis prüfen, Report benennen
+# Inspect a web server directory, name the report
 .\Get-AclGraph.ps1 -Path 'C:\inetpub' -OutFile inetpub-acl.html
 
-# Ganzes Laufwerk, aber Tiefe begrenzen und Müll-Ordner überspringen
+# Whole drive, but limit depth and skip junk folders
 .\Get-AclGraph.ps1 -Path C:\ -Depth 4 -Skip 'WinSxS','node_modules','\.git$'
 
-# Eigene Konfig-Endung und striktere Größengrenze für den Secret-Scan
+# Custom config extension and a stricter size limit for the secret scan
 .\Get-AclGraph.ps1 -Path 'D:\apps' -ScanExtensions 'conf','properties' -MaxScanMB 2
 
-# Eigenes Secret-Muster ergänzen (internes Token-Format)
+# Add a custom secret pattern (internal token format)
 .\Get-AclGraph.ps1 -Path 'C:\svc' -SecretRegex 'INTERNAL_TOKEN\s*=\s*\S+'
 
-# Mehrere Skip-Muster + eigene Default-Ordner-Definition
+# Multiple skip patterns + custom default-folder definition
 .\Get-AclGraph.ps1 -Path C:\ -Skip 'temp','logs','cache' `
     -DefaultDirs '\\Windows\\','\\Program Files\\Common Files\\'
 ```
 
 ---
 
-## Konsolen-Ausgabe
+## Console output
 
-Während des Laufs meldet das Skript:
+During the run the script reports:
 
-- den Benutzer, unter dem gescannt wird, und die Wurzel,
-- die aktive Skip-Liste (falls gesetzt),
-- die Anzahl gescannter Knoten,
-- wie viele Einträge per Skip-Liste übersprungen wurden,
-- wie viele Dateien Secret-Verdacht haben,
-- eine **rote Warnung**, falls der Report Klartext-Secrets enthält.
-
----
-
-## Wie „effektive Rechte" berechnet werden
-
-Das Skript liest pro Element die ACL und löst die Rechte gegen **alle SIDs aus
-deinem Access-Token** auf (dein eigener SID + alle Gruppen). `Deny`-Einträge
-gewinnen gegen `Allow`. Das Ergebnis ist also: *was du an diesem Objekt
-tatsächlich darfst* — nicht eine rohe Auflistung aller ACEs.
-
-**Grenzen:** Die Auflösung deckt normale Allow/Deny-ACEs ab, aber nicht jeden
-Sonderfall der Windows-Autorisierung (z.B. Conditional ACEs / Claims oder
-Privilegien wie `SeBackupPrivilege`, die ACLs umgehen). Für die Misconfig-Jagd
-reicht das in nahezu allen Fällen; für forensische Genauigkeit wären zusätzliche
-`AuthZ`-API-Checks nötig.
-
-Der Secret-Scan ist bewusst pragmatisch: Die Regex fangen die häufigen Fälle gut
-ab, sind aber nicht vollständig. Sehr individuelle Formate über `-SecretRegex`
-ergänzen; bei minifizierten/base64-lastigen Dateien sind einzelne Fehlalarme
-möglich.
+- the user the scan runs as, and the root,
+- the active skip list (if set),
+- the number of scanned nodes,
+- how many entries were skipped via the skip list,
+- how many unique SIDs were resolved,
+- how many files are suspected of containing secrets,
+- a **red warning** if the report contains cleartext secrets.
 
 ---
 
-## Sicherheitshinweis
+## How "effective rights" are computed
 
-Der HTML-Report kann **Klartext-Secrets** enthalten (verdeckt, per Klick
-einblendbar). Behandle die Datei wie ein Geheimnis: lokal öffnen, nicht per Mail
-oder Chat teilen, nach Gebrauch löschen.
+For each item the script reads the ACL and resolves the rights against **all SIDs
+from your access token** (your own SID + all groups). `Deny` entries win over
+`Allow`. The result is therefore: *what you are actually allowed to do on this
+object* — not a raw listing of all ACEs.
+
+To keep this fast, the ACLs are read in **SID form** during the scan (no name
+lookup per file). Every unique SID is then translated into a name exactly **once**
+at the end, instead of repeatedly per ACE — which saves a great deal of time in
+domain environments where name resolution can trigger a network lookup.
+
+**Limits:** The resolution covers normal allow/deny ACEs, but not every special
+case of Windows authorization (e.g. conditional ACEs / claims, or privileges like
+`SeBackupPrivilege` that bypass ACLs). For misconfiguration hunting this is enough
+in nearly all cases; forensic accuracy would require additional `AuthZ` API checks.
+
+The secret scan is deliberately pragmatic: the regexes catch the common cases
+well, but are not exhaustive. Add very specific formats via `-SecretRegex`; with
+minified/base64-heavy files individual false positives are possible.
+
+---
+
+## Security note
+
+The HTML report can contain **cleartext secrets** (masked, revealable on click).
+Treat the file like a secret: open it locally, do not share it via email or chat,
+and delete it after use.
