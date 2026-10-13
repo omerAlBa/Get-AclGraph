@@ -524,6 +524,8 @@ $html = @"
   <button onclick="gFit()">&#9678; Alles</button>
   <button onclick="gExpandAll()">&#10063; Pfade entfalten</button>
   <button onclick="gCollapse()">&#10064; Nur Funde</button>
+  <button onclick="gCollapseLevel()" title="Tiefste aktuell offene Ebene einklappen (mehrfach klicken bis zur Wurzel)">&#9650; Ebene einklappen</button>
+  <label><input type="checkbox" id="writeonly" onchange="toggleWriteOnly(this.checked)"> Nur Schreibzugriff</label>
   <label><input type="checkbox" id="showdef" onchange="toggleDefaults(this.checked)"> Default-Ordner einblenden</label>
   <input id="filter" type="text" placeholder="Filtern: config -test" oninput="applyFilter(this.value)" style="margin-left:auto">
 </div>
@@ -563,6 +565,10 @@ NODES.forEach(n=>n._onPath=false);
 NODES.filter(n=>n.alert||(n.secrets&&n.secrets.length)).forEach(a=>{let c=a.id;while(c&&byId[c]){byId[c]._onPath=true;c=byId[c].parent;}});
 NODES.forEach(n=>{n._expanded=n._onPath&&n.isDir;n._showAll=false;n._m=false;n._md=false;});
 if(!NODES.some(n=>n.alert||(n.secrets&&n.secrets.length))){(kids[0]||[]).forEach(r=>{if(!r.defaultClean)r._expanded=r.isDir;});}
+// _wsub: true, wenn der Knoten selbst ODER ein Nachfahre schreibbar ist.
+// Damit kann "Nur Schreibzugriff" Teilbaeume ohne jeglichen Schreibzugriff
+// ausblenden, aber den Pfad zu schreibbaren Knoten sichtbar halten.
+(function(){function wsub(n){var w=!!n.writable;(kids[n.id]||[]).forEach(function(c){if(wsub(c))w=true;});n._wsub=w;return w;}(kids[0]||[]).forEach(wsub);})();
 
 const stage=document.getElementById('stage'),edges=document.getElementById('edges'),
       wrap=document.getElementById('wrap'),detail=document.getElementById('detail');
@@ -613,13 +619,15 @@ function applyFilter(v){
 let bounds={maxX:0,maxY:0};
 function buildLayout(){
   const rows=[];let rowCursor=0;const filt=filtering();const showDef=document.getElementById('showdef').checked;
+  const wo=document.getElementById('writeonly').checked;
   function visF(n){return n._m||n._md;}
   function walk(n,depth){
     n._depth=depth;const ch=kids[n.id]||[];
     if(n.isDir&&n._expanded&&ch.length){
       const start=rowCursor;
       let shown,hidden=[];
-      if(filt){shown=ch.filter(visF);}
+      if(filt){shown=ch.filter(c=>visF(c)&&(!wo||c._wsub));}
+      else if(wo){shown=ch.filter(c=>c._wsub);}
       else{
         const interesting=c=>c.alert||(c.secrets&&c.secrets.length)||c.writable||c._onPath||c.isDir;
         shown=n._showAll?ch:ch.filter(interesting);
@@ -633,6 +641,7 @@ function buildLayout(){
   }
   (kids[0]||[]).forEach(r=>{
     if(filt&&!visF(r))return;
+    if(wo&&!r._wsub)return;
     walk(r,0);
   });
   return rows;
@@ -735,6 +744,36 @@ function gCollapse(){NODES.forEach(n=>{n._expanded=n._onPath&&n.isDir;n._showAll
 function toggleDefaults(on){
   // saubere Default-Ordner gezielt auf-/zuklappen
   NODES.forEach(n=>{ if(n.isDir&&n.isDefault&&n.defaultClean){ n._expanded=on; if(on)n._showAll=true; } });
+  render();
+}
+// Klappt die tiefste AKTUELL SICHTBARE offene Ebene zu. Mehrfaches Klicken
+// reduziert den Baum schrittweise Ebene fuer Ebene bis zur Wurzel.
+function gCollapseLevel(){
+  let maxLvl=-1;
+  function scan(n){
+    if(!(n.isDir&&n._expanded&&(kids[n.id]||[]).length))return;  // nur durch offene Ordner laufen
+    if(n.level>maxLvl)maxLvl=n.level;
+    (kids[n.id]||[]).forEach(scan);
+  }
+  (kids[0]||[]).forEach(scan);
+  if(maxLvl<0)return;  // nichts offen
+  function fold(n){
+    if(!(n.isDir&&n._expanded&&(kids[n.id]||[]).length))return;
+    if(n.level===maxLvl){n._expanded=false;return;}  // an dieser Ebene zuklappen
+    (kids[n.id]||[]).forEach(fold);
+  }
+  (kids[0]||[]).forEach(fold);
+  render();
+}
+// "Nur Schreibzugriff": blendet Teilbaeume ohne jeglichen Schreibzugriff aus
+// (Pfad zu schreibbaren Knoten bleibt sichtbar, siehe _wsub + buildLayout).
+function toggleWriteOnly(on){
+  if(on){
+    // Pfade zu schreibbaren Knoten aufklappen, damit die Funde sichtbar werden
+    NODES.forEach(n=>{ if(n.isDir&&n._wsub){ n._expanded=true; n._showAll=true; } });
+  }else{
+    NODES.forEach(n=>{ n._expanded=n._onPath&&n.isDir; n._showAll=false; });
+  }
   render();
 }
 

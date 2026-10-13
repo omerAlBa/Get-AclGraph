@@ -63,6 +63,8 @@ The rights abbreviation below each name: `R` read, `W` write, `X` execute,
 - Click a directory = open the detail panel **and** expand/collapse its children.
   The clicked node stays at its on-screen position while doing so.
 - "Pfade entfalten" = expand everything · "Nur Funde" = back to the findings.
+- "Ebene einklappen" = collapse the deepest currently open level. Click it
+  repeatedly to fold the tree level by level, up to the root.
 - Click `… N weitere` = reveal the bundled files.
 
 **Filter** (field at the top right)
@@ -72,6 +74,12 @@ The rights abbreviation below each name: `R` read, `W` write, `X` execute,
 - Multiple terms can be combined with spaces: `config -backup -test`.
 - The search also looks inside **collapsed** areas and expands matches;
   clearing the field restores the initial state.
+
+**Write access only**
+- The checkbox "Nur Schreibzugriff" hides every node you cannot write to. A
+  directory is only hidden when **nothing** in its subtree is writable —
+  the path leading to a writable file or folder always stays visible, so you
+  keep your bearings in the tree. Unchecking it restores the normal view.
 
 **Default folders**
 - Unchanged system folders are grey and collapsed. The checkbox
